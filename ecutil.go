@@ -14,14 +14,50 @@ import (
 
 func main() {
 	rawHex := flag.String("hex", "", "ecdsa public key in raw hexadecimal format")
+	pem := flag.String("pem", "", "ecdsa public key in pem format")
 	curve := flag.String("curve", "P256", "elliptic curve")
 	flag.Parse()
-
-	data, err := toPEM(*curve, *rawHex)
-	if err != nil {
-		log.Fatal(err)
+	switch {
+	case *rawHex != "":
+		data, err := toPEM(*curve, *rawHex)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(data))
+	case *pem != "":
+		data, err := toHex(*curve, *pem)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%x\n", data)
+	default:
+		log.Fatal("invalid input")
 	}
-	fmt.Println(string(data))
+}
+
+func toHex(curve, rawPem string) ([]byte, error) {
+	var c elliptic.Curve
+	switch strings.ToUpper(curve) {
+	case "P224":
+		c = elliptic.P224()
+	case "P256":
+		c = elliptic.P256()
+	case "P384":
+		c = elliptic.P384()
+	default:
+		return nil, fmt.Errorf("unsupported curve %s", curve)
+	}
+	block, _ := pem.Decode([]byte(rawPem))
+	output, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	pubKey, ok := output.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("invalid type %T", output)
+	}
+	data := elliptic.Marshal(c, pubKey.X, pubKey.Y)
+	return data, nil
 }
 
 func toPEM(curve, rawHex string) ([]byte, error) {
